@@ -8,6 +8,7 @@
 
 # testing
 /coverage
+/pages/local
 
 # next.js
 /.next/

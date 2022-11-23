@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-/*import "./ChainlinkExample.sol";*/
+//import "./ChainlinkExample.sol";
 
 contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
     using Counters for Counters.Counter;
@@ -47,7 +47,27 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
     ];
 
     mapping(uint256 => uint8) typeOfNFT;
-    mapping(address => uint256) idToToken;
+    mapping(uint256 => Tracker) idToTracker;
+
+    struct Tracker {
+        uint256 tokenId;
+        address payable owner;
+        string taskId;
+        uint8 achievement;
+    }
+
+    event TrackerCreated(
+        uint256 indexed tokenId,
+        address owner,
+        string taskId,
+        uint8 achievement
+    );
+    event TrackerUpdated(
+        uint256 indexed tokenId,
+        address owner,
+        string taskId,
+        uint8 achievement
+    );
 
     constructor() ERC721("PlanToNFT", "PT-NFT") {
         cycle1 = 0;
@@ -62,7 +82,20 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
         _unpause();
     }
 
-    function safeMint() public payable returns (uint256) {
+    function makeTracker(string memory taskId) public payable {
+        uint256 newTokenId = safeMint(taskId);
+
+        idToTracker[newTokenId] = Tracker(
+            newTokenId,
+            payable(msg.sender),
+            taskId,
+            0
+        );
+
+        emit TrackerCreated(newTokenId, msg.sender, taskId, 0);
+    }
+
+    function safeMint(string memory taskId) public payable returns (uint256) {
         _tokenIds.increment();
         uint256 newTokenId = _tokenIds.current();
         _safeMint(msg.sender, newTokenId);
@@ -77,24 +110,43 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
         return newTokenId;
     }
 
-    function changeNFT(uint256 tokenId)
-        public
-        payable
-        onlyOwner
-        returns (bool)
-    {
+    function updateTracker(uint256 tokenId) public payable {
+        require(msg.sender == ownerOf(tokenId));
+        uint8 newAchievement = checkAchievement();
+        idToTracker[tokenId].achievement = newAchievement;
+        changeNFT(tokenId, newAchievement);
+
+        emit TrackerUpdated(
+            tokenId,
+            msg.sender,
+            idToTracker[tokenId].taskId,
+            idToTracker[tokenId].achievement
+        );
+    }
+
+    function changeNFT(uint256 tokenId, uint8 newAchievement) public payable {
         uint8 typeNFT = typeOfNFT[tokenId];
-        if (cycle2 >= 5) cycle2 -= 5;
+        uint8 index = newAchievement / 25;
         for (uint i = 1; i <= 5; i++) {
             if (i == typeNFT) {
-                _setTokenURI(tokenId, IpfsUri[typeNFT - 1][cycle2]);
+                _setTokenURI(tokenId, IpfsUri[typeNFT - 1][index]);
+            }
+        }
+    }
+
+    function checkAchievement() public payable returns (uint8) {
+        uint8 updatedAchievement;
+        if (cycle2 >= 5) cycle2 -= 5;
+        for (uint i = 0; i < 5; i++) {
+            if (i == cycle2) {
+                updatedAchievement = uint8(i * 25);
             }
         }
         cycle2 += 1;
-        return true;
+        return updatedAchievement;
     }
 
-    function fetchMyNFTs() public view returns (string[] memory) {
+    function fetchMyTrackers() public view returns (Tracker[] memory) {
         uint totalItemCount = _tokenIds.current();
         uint currentIndex = 0;
         uint itemCount = 0;
@@ -105,11 +157,11 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
             }
         }
 
-        string[] memory items = new string[](itemCount);
+        Tracker[] memory items = new Tracker[](itemCount);
         for (uint i = 0; i < totalItemCount; i++) {
             if (ownerOf(i + 1) == msg.sender) {
                 uint currentId = i + 1;
-                string memory currentItem = tokenURI(currentId);
+                Tracker memory currentItem = idToTracker[i + 1];
                 items[currentIndex] = currentItem;
                 currentIndex += 1;
             }
@@ -117,19 +169,19 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
         return items;
     }
 
-    function fetchAllNFTs() public view returns (string[] memory) {
+    function fetchAllTrackers() public view returns (Tracker[] memory) {
         uint itemCount = _tokenIds.current();
 
-        string[] memory items = new string[](itemCount);
+        Tracker[] memory items = new Tracker[](itemCount);
         for (uint i = 0; i < itemCount; i++) {
-            string memory currentURI = tokenURI(i + 1);
+            Tracker memory currentURI = idToTracker[i + 1];
             items[i] = currentURI;
         }
 
         return items;
     }
 
-    function fetchOthersNFTs() public view returns (string[] memory) {
+    function fetchOthersTrackers() public view returns (Tracker[] memory) {
         uint totalItemCount = _tokenIds.current();
         uint currentIndex = 0;
         uint itemCount = 0;
@@ -141,15 +193,38 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
         }
         itemCount = totalItemCount - itemCount;
 
-        string[] memory items = new string[](itemCount);
+        Tracker[] memory items = new Tracker[](itemCount);
         for (uint i = 0; i < totalItemCount; i++) {
             if (ownerOf(i + 1) != msg.sender) {
                 uint currentId = i + 1;
-                string memory currentItem = tokenURI(currentId);
+                Tracker memory currentItem = idToTracker[currentId];
                 items[currentIndex] = currentItem;
                 currentIndex += 1;
             }
         }
+
         return items;
+    }
+
+    function getTracker(uint256 tokenId)
+        public
+        view
+        returns (
+            uint256,
+            address,
+            string memory,
+            uint8
+        )
+    {
+        return (
+            tokenId,
+            idToTracker[tokenId].owner,
+            idToTracker[tokenId].taskId,
+            idToTracker[tokenId].achievement
+        );
+    }
+
+    function getTypeOfNFT(uint256 tokenId) public view returns (uint8) {
+        return typeOfNFT[tokenId];
     }
 }
