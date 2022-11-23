@@ -1,12 +1,11 @@
-import { ethers } from 'ethers';
-import Web3Modal from 'web3modal';
 import { useEffect, useState } from 'react';
+import { ethers } from 'ethers';
 
 import { planToNFTAddress } from '../config';
 
 import PlanToNFT from '../artifacts/contracts/PlanToNFT.sol/PlanToNFT.json';
 
-export default function Home() {
+export default function dashboard() {
   const [nfts, setNfts] = useState([]);
   const [loadingState, setLoadingState] = useState('not-loaded');
   useEffect(() => {
@@ -14,25 +13,21 @@ export default function Home() {
   }, []);
 
   async function loadNFTs() {
-    /** provider 연결 없이 그냥 contract call 했더니 동작 안 했음. */
-    const web3Modal = new Web3Modal();
-    const connection = await web3Modal.connect();
-    const provider = new ethers.providers.Web3Provider(connection);
-    const signer = provider.getSigner();
-
+    const provider = new ethers.providers.JsonRpcProvider(
+      process.env.JSON_RPC_PROVIDER
+    );
     const contract = new ethers.Contract(
       planToNFTAddress,
       PlanToNFT.abi,
-      signer
+      provider
     );
-
-    const data = await contract.fetchMyNFTs();
-
+    const data = await contract.fetchOthersNFTs();
     setNfts(data);
     setLoadingState('loaded');
   }
+
   if (loadingState === 'loaded' && !nfts.length)
-    return <h1 className="px-20 py-10 text-3xl">No items in my dashboard</h1>;
+    return <h1 className="px-20 py-10 text-3xl">No items in dashboard</h1>;
   return (
     <div className="flex justify-center">
       <div className="px-4" style={{ maxWidth: '1600px' }}>
