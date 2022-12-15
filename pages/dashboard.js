@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
+import Web3Modal from 'web3modal';
 
-import { planToNFTAddress } from '../config';
+import { planToNFTAddress, oracleAddress } from '../config';
 
 import PlanToNFT from '../artifacts/contracts/PlanToNFT.sol/PlanToNFT.json';
 
@@ -13,15 +14,17 @@ export default function dashboard() {
   }, []);
 
   async function loadTrackers() {
-    const provider = new ethers.providers.JsonRpcProvider(
-      process.env.JSON_RPC_PROVIDER
-    );
+    const web3Modal = new Web3Modal();
+    const connection = await web3Modal.connect();
+    const provider = new ethers.providers.Web3Provider(connection);
+    const signer = provider.getSigner();
+
     const contract = new ethers.Contract(
       planToNFTAddress,
       PlanToNFT.abi,
-      provider
+      signer
     );
-    const data = await contract.fetchOthersTrackers();
+    const data = await contract.fetchAllTrackers();
     const items = await Promise.all(
       data.map(async (i) => {
         const tokenUri = await contract.tokenURI(i.tokenId);
@@ -31,6 +34,7 @@ export default function dashboard() {
           image: tokenUri,
           achievement: i.achievement,
         };
+        console.log(item);
         return item;
       })
     );
@@ -49,22 +53,20 @@ export default function dashboard() {
               <img src={tracker.image} />
               <div className="p-4">
                 <p
-                  style={{ height: '64px' }}
-                  className="text-2xl font-semibold"
+                  style={{ height: '32px' }}
+                  className="text-l font-semibold"
+                  id={{ i }}
                 >
-                  {tracker.tokenId}
+                  tokenId : {tracker.tokenId}
                 </p>
-                <p
-                  style={{ height: '64px' }}
-                  className="text-2xl font-semibold"
-                >
+                <p style={{ height: '32px' }} className="text-l font-semibold">
+                  owner address :
+                </p>
+                <p style={{ height: '32px' }} className="text-l font-semibold">
                   {tracker.owner}
                 </p>
-                <p
-                  style={{ height: '64px' }}
-                  className="text-2xl font-semibold"
-                >
-                  {tracker.achievement}
+                <p style={{ height: '32px' }} className="text-l font-semibold">
+                  {tracker.achievement}% completed
                 </p>
               </div>
             </div>

@@ -6,9 +6,10 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-//import "./ChainlinkExample.sol";
+import "./PlanToNFTOracle.sol";
 
 contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
+    PlanToNFTOracle PT;
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
@@ -110,11 +111,11 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
         return newTokenId;
     }
 
-    function updateTracker(uint256 tokenId) public payable {
+    function updateTracker(uint256 tokenId, uint8 achv) public payable {
         require(msg.sender == ownerOf(tokenId));
-        uint8 newAchievement = checkAchievement();
-        idToTracker[tokenId].achievement = newAchievement;
-        changeNFT(tokenId, newAchievement);
+        //PT.requestAPIValue(idToTracker[tokenId].taskId);
+        idToTracker[tokenId].achievement = achv;
+        changeNFT(tokenId, achv);
 
         emit TrackerUpdated(
             tokenId,
@@ -134,18 +135,6 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
         }
     }
 
-    function checkAchievement() public payable returns (uint8) {
-        uint8 updatedAchievement;
-        if (cycle2 >= 5) cycle2 -= 5;
-        for (uint i = 0; i < 5; i++) {
-            if (i == cycle2) {
-                updatedAchievement = uint8(i * 25);
-            }
-        }
-        cycle2 += 1;
-        return updatedAchievement;
-    }
-
     function fetchMyTrackers() public view returns (Tracker[] memory) {
         uint totalItemCount = _tokenIds.current();
         uint currentIndex = 0;
@@ -160,7 +149,6 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
         Tracker[] memory items = new Tracker[](itemCount);
         for (uint i = 0; i < totalItemCount; i++) {
             if (ownerOf(i + 1) == msg.sender) {
-                uint currentId = i + 1;
                 Tracker memory currentItem = idToTracker[i + 1];
                 items[currentIndex] = currentItem;
                 currentIndex += 1;
@@ -206,16 +194,9 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
         return items;
     }
 
-    function getTracker(uint256 tokenId)
-        public
-        view
-        returns (
-            uint256,
-            address,
-            string memory,
-            uint8
-        )
-    {
+    function getTracker(
+        uint256 tokenId
+    ) public view returns (uint256, address, string memory, uint8) {
         return (
             tokenId,
             idToTracker[tokenId].owner,
@@ -226,5 +207,9 @@ contract PlanToNFT is ERC721URIStorage, Pausable, Ownable {
 
     function getTypeOfNFT(uint256 tokenId) public view returns (uint8) {
         return typeOfNFT[tokenId];
+    }
+
+    function getTaskId(uint256 tokenId) public view returns (string memory) {
+        return idToTracker[tokenId].taskId;
     }
 }

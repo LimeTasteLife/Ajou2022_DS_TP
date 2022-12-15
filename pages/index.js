@@ -3,9 +3,10 @@ import Web3Modal from 'web3modal';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 
-import { planToNFTAddress } from '../config';
+import { planToNFTAddress, oracleAddress } from '../config';
 
 import PlanToNFT from '../artifacts/contracts/PlanToNFT.sol/PlanToNFT.json';
+import PlanToNFTOracle from '../artifacts/contracts/PlanToNFTOracle.sol/PlanToNFTOracle.json';
 
 export default function Home() {
   const [trackers, setTrackers] = useState([]);
@@ -37,6 +38,7 @@ export default function Home() {
           owner: i.owner,
           image: tokenUri,
           achievement: i.achievement,
+          taskId: i.taskId,
         };
         return item;
       })
@@ -57,11 +59,27 @@ export default function Home() {
       signer
     );
 
+    const contract2 = new ethers.Contract(
+      oracleAddress,
+      PlanToNFTOracle.abi,
+      signer
+    );
+    //contract2.withdrawLink();
     const tokenId = string.split(':')[1].slice(0, 1);
     //console.log(tokenId);
-    const transaction = await contract.updateTracker(parseInt(tokenId));
-    await transaction.wait();
-    router.push('/');
+    const transaction = await contract.getTaskId(parseInt(tokenId));
+    console.log(transaction);
+    const transaction2 = await contract2.requestAPIValue(transaction);
+
+    contract2.on('RequestValue', async (reqId, value) => {
+      console.log(reqId, value.toNumber());
+      const trx1 = await contract.updateTracker(tokenId, value.toNumber());
+    });
+
+    contract.on('TrackerUpdated', () => {
+      console.log('done!');
+      router.push('/');
+    });
   }
 
   if (loadingState === 'loaded' && !trackers.length)
@@ -70,16 +88,18 @@ export default function Home() {
     <div className="flex justify-center">
       <div className="px-4" style={{ maxWidth: '1600px' }}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
-          {trackers.map((tracker, i) => (
-            <div key={i} className="border shadow rounded-xl overflow-hidden">
+          {trackers.map((tracker) => (
+            <div
+              key={tracker.tokenId}
+              className="border shadow rounded-xl overflow-hidden"
+            >
               <img src={tracker.image} />
               <div className="p-4">
-                <p
-                  style={{ height: '32px' }}
-                  className="text-l font-semibold"
-                  id={{ i }}
-                >
+                <p style={{ height: '32px' }} className="text-l font-semibold">
                   tokenId : {tracker.tokenId}
+                </p>
+                <p style={{ height: '32px' }} className="text-l font-semibold">
+                  taskId : {tracker.taskId}
                 </p>
                 <p style={{ height: '32px' }} className="text-l font-semibold">
                   owner address :
@@ -96,7 +116,7 @@ export default function Home() {
                   }}
                   className="font-bold mt-4 bg-gray-500 text-black rounded p-4 shadow-lg"
                 >
-                  update tracker (id:{i + 1})
+                  update tracker (id:{tracker.tokenId})
                 </button>
               </div>
             </div>
